@@ -97,7 +97,7 @@ Run with the chosen package manager, then `cd <projectName>`:
 pnpm create nuxt@latest <projectName> --template minimal --packageManager pnpm --no-install
 ```
 
-Translate for the other package managers (`npm create nuxt@latest <projectName> -- --template minimal ...`, `yarn create nuxt`, `bun create nuxt`) and pass the same `--packageManager` value. Add `--gitInit` when `gitInit` is yes. The flags are required: the agent's terminal is non-interactive and the CLI exits without `--template`. `--no-install` is deliberate; packages are installed once, after every feature is applied.
+Translate for the other package managers (`npm create nuxt@latest <projectName> -- --template minimal ...`, `yarn create nuxt`, `bun create nuxt`) and pass the same `--packageManager` value. Always pass `--gitInit` (yes) or `--no-gitInit` (no). The flags are required: the agent's terminal is non-interactive and the CLI exits when `--template` or the git choice is missing. `--no-install` is deliberate; packages are installed once, after every feature is applied.
 
 ## Baseline (always apply)
 
@@ -136,7 +136,7 @@ Each reference file lists path-scoped blocks. A block headed `### Path: <file>` 
 
 UI → Linter → DB → Auth → Dashboard → i18n → SEO → Validation → AI → Storage → Deployment.
 
-When multiple features add entries to `nuxt.config.ts` (`modules`, `runtimeConfig`, `nitro`, `css`, module config keys), collect them and write the file once. Keep `modules` in this order: `@nuxt/ui`, `@nuxt/eslint`, `@nuxtjs/supabase` or `nuxt-postgrest`, `nuxt-auth-utils`, `@nuxtjs/i18n`, `@nuxtjs/seo`.
+When multiple features add entries to `nuxt.config.ts` (`modules`, `runtimeConfig`, `nitro`, `css`, module config keys), collect them and write the file once. Order top-level keys as `@nuxt/eslint`'s `nuxt/nuxt-config-keys-order` rule expects: `modules`, `devtools`, `css`, `runtimeConfig`, `devServer`, `compatibilityDate`, `nitro`, then module config keys (`eslint`, `supabase`, `i18n`, ...). Keep `modules` in this order: `@nuxt/ui`, `@nuxt/eslint`, `@nuxtjs/supabase` or `nuxt-postgrest`, `nuxt-auth-utils`, `@nuxtjs/i18n`, `@nuxtjs/seo`.
 
 ## Guardrails
 

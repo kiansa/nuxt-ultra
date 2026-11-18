@@ -60,7 +60,7 @@ export default defineEventHandler(async (event) => {
   const { prompt } = await readValidatedBody(event, bodySchema.parse)
 
   const response = await claude.messages.create({
-    model: 'claude-opus-5',
+    model: 'claude-opus-5-5',
     max_tokens: 16000,
     messages: [{ role: 'user', content: prompt }],
   })

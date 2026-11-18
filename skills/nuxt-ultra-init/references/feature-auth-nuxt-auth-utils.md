@@ -59,9 +59,9 @@ export {}
 ### Path: shared/utils/auth-schemas.ts
 ```ts
 import { z } from 'zod'
-
-export const emailSchema = z.email('Enter a valid email address')
-export const passwordSchema = z.string().min(8, 'Must be at least 8 characters')
+// Shared field schemas live in schemas.ts (validation feature, always selected with auth).
+// Redefining them here would make Nuxt warn about duplicated auto-imports.
+import { emailSchema, passwordSchema } from './schemas'
 
 export const loginSchema = z.object({
   email: emailSchema,
@@ -86,19 +86,23 @@ export const otpSchema = z.object({
 
 export const forgotPasswordSchema = z.object({ email: emailSchema })
 
+// zod 4: .refine() keeps the ZodObject type (there is no .innerType()), and .pick()/.omit() throw on
+// refined objects, so the client-side form schema is built from the same shape instead.
+const newPasswordShape = { password: passwordSchema, confirmPassword: z.string() }
+const passwordsMatch = { message: 'Passwords do not match', path: ['confirmPassword'] }
+
+export const newPasswordSchema = z.object(newPasswordShape)
+  .refine(d => d.password === d.confirmPassword, passwordsMatch)
+
 export const resetPasswordSchema = z.object({
   credentialId: z.uuid(),
   token: z.string().min(1),
-  password: passwordSchema,
-  confirmPassword: z.string(),
-}).refine(d => d.password === d.confirmPassword, {
-  message: 'Passwords do not match',
-  path: ['confirmPassword'],
-})
+  ...newPasswordShape,
+}).refine(d => d.password === d.confirmPassword, passwordsMatch)
 
 export type LoginInput = z.output<typeof loginSchema>
 export type RegisterInput = z.output<typeof registerSchema>
-export type ResetPasswordInput = z.output<typeof resetPasswordSchema>
+export type NewPasswordInput = z.output<typeof newPasswordSchema>
 ```
 
 ### Path: SQL (tell the user to run it)
@@ -265,14 +269,17 @@ export async function createUserWithCredential(event: RequestEvent, input: {
   return { user, credential }
 }
 
-/** Builds the session payload and writes the cookie. The only place that calls setUserSession. */
+/**
+ * Builds the session payload and writes the cookie. Replaces (not merges) any existing session, so a previous
+ * user's fields or a stale `remember` flag never carry over. The only place that writes the session.
+ */
 export async function signIn(event: RequestEvent, user: UserRow, options: { remember?: boolean } = {}) {
   const session = {
     user: { id: user.id, email: user.email, name: user.name, avatar: user.avatar_url ?? undefined },
     loggedInAt: Date.now(),
     ...(options.remember ? { remember: true } : {}),
   }
-  await setUserSession(event, session, options.remember ? { maxAge: REMEMBER_ME_MAX_AGE } : undefined)
+  await replaceUserSession(event, session, options.remember ? { maxAge: REMEMBER_ME_MAX_AGE } : undefined)
 
   // DB is nuxt-postgrest only: store a user JWT so usePostgrest()/usePostgrestUser() run as this user under RLS.
   // Same lifetime as the session; cleared on logout by server/plugins/postgrest-session.ts.
@@ -307,14 +314,15 @@ export default defineEventHandler(async (event) => {
 
   if (!hasEmail) {
     await signIn(event, created.user)
-    return { confirmed: true }
+    return { confirmed: true as const }
   }
 
   await sendEmail({ to: email, ...otpEmail(otp!, OTP_MINUTES) })
-  return { confirmed: false, credentialId: created.credential.id }
+  // `as const` makes `confirmed` a discriminant, so `!res.confirmed` narrows to the branch with credentialId.
+  return { confirmed: false as const, credentialId: created.credential.id }
 })
 ```
-If `emailProvider` is `none`, replace the body with: create the credential with `emailConfirmed: true`, call `signIn`, return `{ confirmed: true }`, and drop the `hasEmail` branch.
+If `emailProvider` is `none`, replace the body with: create the credential with `emailConfirmed: true`, call `signIn`, return `{ confirmed: true as const }`, and drop the `hasEmail` branch.
 
 ### Path: server/api/auth/confirm-otp.post.ts
 Only when `emailProvider` is `resend`.
@@ -362,7 +370,7 @@ export default defineEventHandler(async (event) => {
     const otp = genOtp()
     await useDb(event).from('credentials').update({ otp, otp_expires_at: minutesFromNow(OTP_MINUTES) }).eq('id', credential.id)
     await sendEmail({ to: email, ...otpEmail(otp, OTP_MINUTES) })
-    return { confirmed: false, credentialId: credential.id }
+    return { confirmed: false as const, credentialId: credential.id }
   }
 
   if (!(await verifyPassword(credential.password_hash, password))) throw invalidCredentials()
@@ -371,7 +379,7 @@ export default defineEventHandler(async (event) => {
   if (!user) throw createError({ status: 500, message: 'User not found' })
 
   await signIn(event, user, { remember })
-  return { confirmed: true }
+  return { confirmed: true as const }
 })
 ```
 If `emailProvider` is `none`, delete the `email_confirmed` block.
@@ -822,11 +830,7 @@ async function onSubmit(payload: FormSubmitEvent<RegisterInput>) {
         class="mb-2"
       />
       <span class="text-muted text-sm">
-        By continuing you agree to our
-        <NuxtLink
-          to="/terms"
-          class="text-primary font-medium"
-        >Terms of Service</NuxtLink>.
+        By continuing you agree to our Terms of Service.
       </span>
     </template>
   </UAuthForm>
@@ -905,7 +909,7 @@ Only when `emailProvider` is `resend`.
 ```vue
 <script setup lang="ts">
 import type { AuthFormField, FormSubmitEvent } from '@nuxt/ui'
-import type { ResetPasswordInput } from '#shared/utils/auth-schemas'
+import type { NewPasswordInput } from '#shared/utils/auth-schemas'
 
 definePageMeta({
   layout: 'auth',
@@ -926,7 +930,7 @@ const fields: AuthFormField[] = [
   { name: 'confirmPassword', type: 'password', label: 'Confirm password', placeholder: '••••••••', required: true, autocomplete: 'new-password' },
 ]
 
-async function onSubmit(payload: FormSubmitEvent<Pick<ResetPasswordInput, 'password' | 'confirmPassword'>>) {
+async function onSubmit(payload: FormSubmitEvent<NewPasswordInput>) {
   loading.value = true
   errorMessage.value = ''
   try {
@@ -946,7 +950,7 @@ async function onSubmit(payload: FormSubmitEvent<Pick<ResetPasswordInput, 'passw
 <template>
   <UAuthForm
     :fields="fields"
-    :schema="resetPasswordSchema.innerType().pick({ password: true, confirmPassword: true })"
+    :schema="newPasswordSchema"
     title="Choose a new password"
     icon="i-lucide-key-round"
     :submit="{ label: 'Reset password', color: 'primary', loading }"
@@ -995,6 +999,7 @@ npm install nuxt-auth-utils
 - On Cloudflare Workers, `compatibility_date` must be `2025-04-01` or later (the deployment feature uses today's date) or the Worker cannot read `NUXT_APP_SECRET` and `NUXT_OAUTH_*`.
 - Run the SQL, then `npm run db:types`.
 - OAuth callback URLs: `<origin>/auth/github`, `<origin>/auth/google`.
+- The register page mentions the Terms of Service as plain text; link it once `app/pages/terms.vue` exists.
 - Put pages that need a session under `app/pages/(protected)/`; the folder name never appears in the URL. Protect API routes with `await requireUserSession(event)`.
 - Without a Resend key in dev, OTP codes and reset links are printed to the server console.
 
@@ -1002,7 +1007,7 @@ npm install nuxt-auth-utils
 Apply only when `@nuxtjs/i18n` is also selected.
 
 1. In `auth.global.ts` and `useAuth.ts`, wrap paths with `useLocalePath()`.
-2. Replace `<NuxtLink>` with `<NuxtLinkLocale>` in the guest pages.
+2. In the guest pages, keep `<NuxtLink>` and wrap each `to` with `localePath()` (`const localePath = useLocalePath()` in each page), e.g. `:to="localePath('/register')"`. Do not switch to `<NuxtLinkLocale>`: `@nuxt/eslint`'s `vue/multiline-html-element-content-newline` exempts `NuxtLink` but not `NuxtLinkLocale`, so the inline links fail lint.
 3. Replace user-facing strings with `t('auth.…')` and add these keys to every locale file:
    ```json
    {

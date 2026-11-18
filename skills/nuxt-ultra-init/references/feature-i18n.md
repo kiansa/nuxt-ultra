@@ -34,7 +34,7 @@ Add to `modules`:
 '@nuxtjs/i18n',
 ```
 
-Add top-level. Include `baseUrl` only when `siteUrl` is known (SEO feature).
+Add top-level. `baseUrl` is needed for valid hreflang/canonical links; without it every SSR request logs `I18n baseUrl is required`. Use `siteUrl` when the SEO feature supplied one, otherwise `''`, and always add `NUXT_PUBLIC_I18N_BASE_URL` to the env files (see **Path: .env.local** below), which overrides it at runtime.
 ```ts
 i18n: {
   baseUrl: '<siteUrl>',
@@ -48,6 +48,18 @@ i18n: {
   // `{ useCookie: true, cookieKey: 'i18n_redirected', redirectOn: 'root' }` if wanted.
   detectBrowserLanguage: false,
 },
+```
+
+### Path: .env.local
+```dotenv
+# i18n: origin used for hreflang / canonical links
+NUXT_PUBLIC_I18N_BASE_URL="http://localhost:<devPort>"
+```
+
+### Path: .env.production
+```dotenv
+# i18n: origin used for hreflang / canonical links
+NUXT_PUBLIC_I18N_BASE_URL="<siteUrl, or https://your-domain.com>"
 ```
 
 ### Path: .vscode/settings.json
@@ -241,7 +253,7 @@ export function useTranslatedSchema<S extends StandardSchemaV1>(schema: S): S {
   const { t, te, locale } = useI18n()
 
   watch(locale, (code) => {
-    const loader = (zodLocales as Record<string, () => ReturnType<typeof zodLocales.en>>)[code]
+    const loader = (zodLocales as unknown as Record<string, typeof zodLocales.en | undefined>)[code]
     z.config(loader ? loader() : zodLocales.en())
   }, { immediate: true })
 

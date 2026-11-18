@@ -105,7 +105,7 @@ Tell the user:
 
 ## Deployment: node
 
-Nitro's default `node-server` preset. No config changes. `npm run build` produces `.output/`; start with `node .output/server/index.mjs`. The README covers traditional hosts (Plesk, cPanel).
+Nitro's default `node-server` preset. No config changes. `npm run build` produces `.output/`; start with `node .output/server/index.mjs`. The app needs this Node server (auth and API routes), so on traditional hosts (Plesk, cPanel) use their Node.js app support pointing at `.output/server/index.mjs`, not static Apache serving.
 
 ## Deployment: vercel
 

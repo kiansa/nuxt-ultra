@@ -410,7 +410,7 @@ Admin routes are only protected by login, not by role. Add a `role` column to `u
 Apply only when `@nuxtjs/i18n` is also selected.
 
 1. Wrap every `to` in the layouts with `useLocalePath()` and move labels to locale files under a `dashboard` key.
-2. In `DashboardSidebar` open the mobile menu from the reading side: `:menu="{ side: $i18n.localeProperties.dir === 'rtl' ? 'right' : 'left' }"`.
+2. In `DashboardSidebar` open the mobile menu from the reading side. `localeProperties` is a `ComputedRef`, so read it from `useI18n()` in the script (`const { localeProperties } = useI18n()`) and use `:menu="{ side: localeProperties.dir === 'rtl' ? 'right' : 'left' }"` in the template.
 3. Add to `app/app.config.ts` so the collapse chevron flips in RTL:
    ```ts
    dashboardSidebarCollapse: { base: 'rtl:rotate-180' },
