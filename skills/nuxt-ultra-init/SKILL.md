@@ -136,7 +136,7 @@ Each reference file lists path-scoped blocks. A block headed `### Path: <file>` 
 
 UI → Linter → DB → Auth → Dashboard → i18n → SEO → Validation → AI → Storage → Deployment.
 
-When multiple features add entries to `nuxt.config.ts` (`modules`, `runtimeConfig`, `nitro`, `css`, module config keys), collect them and write the file once. Order top-level keys as `@nuxt/eslint`'s `nuxt/nuxt-config-keys-order` rule expects: `modules`, `devtools`, `css`, `runtimeConfig`, `devServer`, `compatibilityDate`, `nitro`, then module config keys (`eslint`, `supabase`, `i18n`, ...). Keep `modules` in this order: `@nuxt/ui`, `@nuxt/eslint`, `@nuxtjs/supabase` or `nuxt-postgrest`, `nuxt-auth-utils`, `@nuxtjs/i18n`, `@nuxtjs/seo`.
+When multiple features add entries to `nuxt.config.ts` (`modules`, `runtimeConfig`, `nitro`, `css`, module config keys), collect them and write the file once. Order top-level keys as `@nuxt/eslint`'s `nuxt/nuxt-config-keys-order` rule expects: `modules`, `devtools`, `css`, `site`, `runtimeConfig`, `routeRules`, `devServer`, `compatibilityDate`, `nitro`, then module config keys alphabetically (`eslint`, `i18n`, `icon`, `ogImage`, `sitemap`, `supabase`). `create nuxt` writes `compatibilityDate` first; move it. Keep `modules` in this order: `@nuxt/ui`, `@nuxt/eslint`, `@nuxtjs/supabase` or `nuxt-postgrest`, `nuxt-auth-utils`, `@nuxtjs/i18n`, `@nuxtjs/seo`.
 
 ## Guardrails
 
@@ -151,5 +151,6 @@ When multiple features add entries to `nuxt.config.ts` (`modules`, `runtimeConfi
 After installing packages:
 
 1. Run `npx nuxt prepare` (or the package manager equivalent) so `.nuxt/` types exist.
-2. Run `npm run typecheck`. If `@nuxt/eslint` was selected, also run `npm run lint`.
-3. Fix errors caused by this setup. Report anything left for the user (for example, env values they must fill in, or a database table they must create).
+2. Run `npm run typecheck`. If `@nuxt/eslint` was selected, run `npm run lint:fix`, then `npm run lint` (fixes ordering and stylistic issues in generated files, then reports what is left).
+3. Run `npm run build` to catch prerender errors (for example links to pages that do not exist).
+4. Fix errors caused by this setup. Report anything left for the user (for example, env values they must fill in, or a database table they must create).

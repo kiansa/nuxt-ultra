@@ -42,7 +42,7 @@ supabase: {
 ### Path: .env.local
 ```dotenv
 # Supabase
-NUXT_PUBLIC_SUPABASE_URL="https://<project>.supabase.co"
+NUXT_PUBLIC_SUPABASE_URL="https://your-project-ref.supabase.co"
 NUXT_PUBLIC_SUPABASE_KEY="your_publishable_or_anon_key"
 NUXT_SUPABASE_SECRET_KEY="your_secret_or_service_role_key"
 
@@ -54,10 +54,12 @@ SUPABASE_ACCESS_TOKEN="your_personal_access_token"
 ### Path: .env.production
 ```dotenv
 # Supabase
-NUXT_PUBLIC_SUPABASE_URL="https://<project>.supabase.co"
+NUXT_PUBLIC_SUPABASE_URL="https://your-project-ref.supabase.co"
 NUXT_PUBLIC_SUPABASE_KEY="your_publishable_or_anon_key"
 NUXT_SUPABASE_SECRET_KEY="your_secret_or_service_role_key"
 ```
+
+The placeholder must stay a syntactically valid URL: `@nuxtjs/supabase` 2.x parses it at build time and aborts `nuxt build`/`typecheck` on an invalid one (`<project>` would fail).
 
 If the installed `@nuxtjs/supabase` is older than 2.0, use the legacy names `SUPABASE_URL`, `SUPABASE_KEY` and `SUPABASE_SERVICE_KEY` instead.
 

@@ -8,6 +8,14 @@ Apply when Dashboard `user` and/or `admin` is selected. Requires UI `@nuxt/ui` a
 - `dashboardRoute` = `dashboard` (or any other name): the dashboard lives at `/<dashboardRoute>` with layout `dashboard`; `/` stays the public home page from the UI feature.
 - `dashboardRoute` = `/`: the app has no public home. The dashboard is `app/pages/(protected)/index.vue`, the dashboard layout becomes `app/layouts/default.vue`, and the UI feature's home page, header and footer are **not** created. Also set `nitro.prerender` to `{ crawlLinks: false, routes: [] }` because there is nothing public to prerender. Redirects after login already go to `/`.
 
+Prerendering: add top-level `routeRules` so the baseline crawler does not bake signed-out redirects into static copies of the dashboard (static hosts serve those before the server, which would send signed-in users to `/login`). Include only the selected dashboards; add `robots: false` to each when SEO is selected; with i18n, repeat each rule for every non-default locale prefix (`'/fa/<dashboardRoute>/**'`). Skip this when `dashboardRoute` is `/` (prerendering is off).
+```ts
+routeRules: {
+  '/<dashboardRoute>/**': { prerender: false },
+  '/admin/**': { prerender: false },
+},
+```
+
 Protection:
 - Auth `nuxt-auth-utils`: everything under `app/pages/(protected)/` is protected by the global middleware. No per-page config.
 - Auth `@nuxtjs/supabase`: add `/<dashboardRoute>(/*)?` and `/admin(/*)?` to `redirectOptions.include` (or `/(.*)?` with `exclude: ['/login', '/confirm']` when `dashboardRoute` is `/`). The `(protected)` folder is still used for consistency.

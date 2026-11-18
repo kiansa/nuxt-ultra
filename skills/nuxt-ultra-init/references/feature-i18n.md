@@ -153,6 +153,8 @@ Translations come from a `translations` table with one row per key and one colum
 file: { path: 'remote.ts', cache: false },
 ```
 
+Also set `nitro.prerender` to `{ crawlLinks: false, routes: [] }`. Every prerendered page would fetch `/api/locales/<code>` at build time, so the build would need a reachable database and the translations would be frozen until the next deploy. The sitemap (SEO feature) is still generated.
+
 ### Path: i18n/locales/remote.ts
 ```ts
 export default defineI18nLocale(async (locale) => {
@@ -178,7 +180,8 @@ import type { Database } from '#shared/types/database.types'
 
 const allowed = new Set(['en', 'fa']) // keep in sync with nuxt.config locales
 
-export default defineEventHandler(async (event) => {
+// Cached for a minute: SSR loads messages on every request.
+export default defineCachedEventHandler(async (event) => {
   const locale = getRouterParam(event, 'locale') ?? ''
   if (!allowed.has(locale)) {
     throw createError({ status: 404, message: `Unknown locale ${locale}` })
@@ -191,14 +194,15 @@ export default defineEventHandler(async (event) => {
   return Object.fromEntries(
     (data as Array<Record<string, string | null>>).map(row => [row.id, row[locale] ?? row.id]),
   )
-})
+}, { maxAge: 60 })
 ```
 
 **DB is `nuxt-postgrest`:**
 ```ts
 const allowed = new Set(['en', 'fa']) // keep in sync with nuxt.config locales
 
-export default defineEventHandler(async (event) => {
+// Cached for a minute: SSR loads messages on every request.
+export default defineCachedEventHandler(async (event) => {
   const locale = getRouterParam(event, 'locale') ?? ''
   if (!allowed.has(locale)) {
     throw createError({ status: 404, message: `Unknown locale ${locale}` })
@@ -211,7 +215,7 @@ export default defineEventHandler(async (event) => {
   return Object.fromEntries(
     (data as Array<Record<string, string | null>>).map(row => [row.id, row[locale] ?? row.id]),
   )
-})
+}, { maxAge: 60 })
 ```
 
 ## RTL locales

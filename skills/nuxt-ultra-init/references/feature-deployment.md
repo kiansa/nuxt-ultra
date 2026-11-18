@@ -11,16 +11,14 @@ Targets Cloudflare Workers with static assets. Nitro writes `.output/server/wran
 Add inside `nitro`:
 ```ts
 preset: 'cloudflare-module',
+// `deployConfig` also enables node compat. Nitro sets `main` and the assets binding/directory itself
+// (and warns if they are given), so only the keys below belong here.
 cloudflare: {
   deployConfig: true,
-  nodeCompat: true,
   wrangler: {
     name: '<cloudflareWorkerName>',
-    main: './.output/server/index.mjs',
     compatibility_date: '<today, YYYY-MM-DD>',
     assets: {
-      binding: 'ASSETS',
-      directory: './.output/public/',
       html_handling: 'drop-trailing-slash',
     },
     observability: {

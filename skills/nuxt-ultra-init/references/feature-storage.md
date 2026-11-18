@@ -103,7 +103,7 @@ export default defineEventHandler(async (event) => {
   // Auth `@nuxtjs/supabase` instead:
   // const user = await serverSupabaseUser(event)
   // if (!user) throw createError({ status: 401, message: 'Unauthorized' })
-  // const ownerId = user.id
+  // const ownerId = user.sub // JWT claims: the user id is `sub` (there is no `.id`)
 
   const { key: fileKey, body } = await readUploadedFile(event)
   const key = `users/${ownerId}/${fileKey}`

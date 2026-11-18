@@ -18,6 +18,13 @@ Add to `modules`:
 Add top-level:
 ```ts
 css: ['~/assets/css/main.css'],
+
+// Bundle every icon the app uses into the client. On edge presets (Cloudflare) @nuxt/icon forces its
+// server bundle to `remote`, so icons missing from the client bundle are fetched from a CDN at runtime.
+// Do not use `serverBundle.collections` instead: bundling whole collections exhausts Nitro's memory.
+icon: {
+  clientBundle: { scan: true },
+},
 ```
 
 ### Path: app/assets/css/main.css
@@ -323,7 +330,7 @@ npm install -D @iconify-json/lucide @iconify-json/simple-icons
 
 Nuxt UI v4 bundles Tailwind CSS v4; no separate install is needed. With pnpm, add `shamefully-hoist=true` to `.npmrc`.
 
-Install every icon collection the app uses as an `@iconify-json/*` dev dependency. Without the local collection, Nuxt Icon fetches icons from the Iconify API at request time, which fails on edge runtimes such as Cloudflare Workers and slows SSR everywhere else. `lucide` is the default set; `simple-icons` covers the OAuth buttons.
+Install every icon collection the app uses as an `@iconify-json/*` dev dependency; `clientBundle.scan` reads icons from these local packages. Without them Nuxt Icon fetches icons from a CDN at request time, which fails or is slow on edge runtimes such as Cloudflare Workers. `lucide` is the default set; `simple-icons` covers the OAuth buttons.
 
 ## i18n addendum
 Apply only when `@nuxtjs/i18n` is also selected. Update `app/app.vue`:

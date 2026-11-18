@@ -36,6 +36,16 @@ resendApiKey: '',
 emailFrom: '',
 ```
 
+Add top-level `routeRules`. The baseline prerender crawler follows links into these pages; prerendered copies of session-dependent pages are wrong (and static hosts such as Cloudflare serve them before the server runs). When SEO is selected, use `{ prerender: false, robots: false }` so they also stay out of the sitemap. With i18n, repeat each rule for every non-default locale prefix (e.g. `'/fa/login'`).
+```ts
+routeRules: {
+  '/login': { prerender: false },
+  '/register': { prerender: false },
+  '/forgot-password': { prerender: false },
+  '/reset-password': { prerender: false },
+},
+```
+
 ### Path: shared/types/auth.d.ts
 ```ts
 declare module '#auth-utils' {
@@ -524,6 +534,26 @@ export default defineNitroPlugin(() => {
 })
 ```
 
+### Path: app/pages/terms.vue
+Public placeholder linked from the auth pages. Tell the user to replace the text.
+```vue
+<script setup lang="ts">
+definePageMeta({ title: 'Terms of Service' })
+</script>
+
+<template>
+  <UPage>
+    <UPageHeader title="Terms of Service" />
+    <UPageBody>
+      <p class="text-muted">
+        Replace this placeholder with your terms.
+      </p>
+    </UPageBody>
+  </UPage>
+</template>
+```
+With `dashboardRoute` = `/` there is no public layout; give the page `layout: 'auth'` instead.
+
 ### Path: app/middleware/auth.global.ts
 ```ts
 const ONE_DAY = 24 * 60 * 60 * 1000
@@ -830,7 +860,11 @@ async function onSubmit(payload: FormSubmitEvent<RegisterInput>) {
         class="mb-2"
       />
       <span class="text-muted text-sm">
-        By continuing you agree to our Terms of Service.
+        By continuing you agree to our
+        <NuxtLink
+          to="/terms"
+          class="text-primary font-medium"
+        >Terms of Service</NuxtLink>.
       </span>
     </template>
   </UAuthForm>
@@ -999,7 +1033,7 @@ npm install nuxt-auth-utils
 - On Cloudflare Workers, `compatibility_date` must be `2025-04-01` or later (the deployment feature uses today's date) or the Worker cannot read `NUXT_APP_SECRET` and `NUXT_OAUTH_*`.
 - Run the SQL, then `npm run db:types`.
 - OAuth callback URLs: `<origin>/auth/github`, `<origin>/auth/google`.
-- The register page mentions the Terms of Service as plain text; link it once `app/pages/terms.vue` exists.
+- Replace the placeholder text in `app/pages/terms.vue`.
 - Put pages that need a session under `app/pages/(protected)/`; the folder name never appears in the URL. Protect API routes with `await requireUserSession(event)`.
 - Without a Resend key in dev, OTP codes and reset links are printed to the server console.
 
@@ -1008,7 +1042,7 @@ Apply only when `@nuxtjs/i18n` is also selected.
 
 1. In `auth.global.ts` and `useAuth.ts`, wrap paths with `useLocalePath()`.
 2. In the guest pages, keep `<NuxtLink>` and wrap each `to` with `localePath()` (`const localePath = useLocalePath()` in each page), e.g. `:to="localePath('/register')"`. Do not switch to `<NuxtLinkLocale>`: `@nuxt/eslint`'s `vue/multiline-html-element-content-newline` exempts `NuxtLink` but not `NuxtLinkLocale`, so the inline links fail lint.
-3. Replace user-facing strings with `t('auth.…')` and add these keys to every locale file:
+3. Replace user-facing strings with `t('auth.…')` and add these keys to every locale file (in `remote` mode, insert them as rows of `translations` with dotted ids such as `auth.signIn` instead):
    ```json
    {
      "auth": {
