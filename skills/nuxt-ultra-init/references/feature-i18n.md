@@ -169,12 +169,12 @@ const allowed = new Set(['en', 'fa']) // keep in sync with nuxt.config locales
 export default defineEventHandler(async (event) => {
   const locale = getRouterParam(event, 'locale') ?? ''
   if (!allowed.has(locale)) {
-    throw createError({ statusCode: 404, message: `Unknown locale ${locale}` })
+    throw createError({ status: 404, message: `Unknown locale ${locale}` })
   }
 
   const db = serverSupabaseServiceRole<Database>(event)
   const { data, error } = await db.from('translations').select(`id, ${locale}`)
-  if (error) throw createError({ statusCode: 500, message: error.message })
+  if (error) throw createError({ status: 500, message: error.message })
 
   return Object.fromEntries(
     (data as Array<Record<string, string | null>>).map(row => [row.id, row[locale] ?? row.id]),
@@ -189,12 +189,12 @@ const allowed = new Set(['en', 'fa']) // keep in sync with nuxt.config locales
 export default defineEventHandler(async (event) => {
   const locale = getRouterParam(event, 'locale') ?? ''
   if (!allowed.has(locale)) {
-    throw createError({ statusCode: 404, message: `Unknown locale ${locale}` })
+    throw createError({ status: 404, message: `Unknown locale ${locale}` })
   }
 
   const db = usePostgrestAdmin()
   const { data, error } = await db.from('translations').select(`id, ${locale}`)
-  if (error) throw createError({ statusCode: 500, message: error.message })
+  if (error) throw createError({ status: 500, message: error.message })
 
   return Object.fromEntries(
     (data as Array<Record<string, string | null>>).map(row => [row.id, row[locale] ?? row.id]),

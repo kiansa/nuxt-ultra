@@ -290,7 +290,8 @@ import { defineEventHandler, readValidatedBody, useRuntimeConfig } from 'nuxt/se
 export default defineEventHandler(async (event) => {
   const { name, email, password } = await readValidatedBody(event, registerSchema.parse)
 
-  const hasEmail = !!useRuntimeConfig().resendApiKey || process.env.NODE_ENV !== 'production'
+  // Without a Resend key, dev still runs the OTP flow (codes are logged); production auto-confirms.
+  const hasEmail = !!useRuntimeConfig().resendApiKey || import.meta.dev
   const otp = hasEmail ? genOtp() : undefined
 
   const created = await createUserWithCredential(event, {

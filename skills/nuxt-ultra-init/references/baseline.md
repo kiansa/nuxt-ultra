@@ -24,7 +24,7 @@ Patch scripts. `dev` reads `.env.local`, `build` reads `.env.production`; both f
 
 ### Path: terminal command
 ```bash
-npm install -D typescript vue-tsc
+npm install -D typescript vue-tsc @types/node
 ```
 
 ### Path: nuxt.config.ts

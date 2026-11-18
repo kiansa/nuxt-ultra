@@ -66,7 +66,7 @@ export async function readUploadedFile(event: Parameters<typeof readFormData>[0]
   const form = await readFormData(event)
   const file = form.get('file')
   if (!(file instanceof File) || !file.size) {
-    throw createError({ statusCode: 400, message: 'No file provided' })
+    throw createError({ status: 400, message: 'No file provided' })
   }
   // UUID prefix so same-named uploads never overwrite each other.
   const key = `${crypto.randomUUID()}-${file.name}`
@@ -86,7 +86,7 @@ export default defineEventHandler(async (event) => {
   }
   catch (error) {
     console.error('[upload] failed', error)
-    throw createError({ statusCode: 500, message: 'File upload failed' })
+    throw createError({ status: 500, message: 'File upload failed' })
   }
 
   return { key, url: r2Domain ? `${r2Domain}/${key}` : null }
@@ -102,7 +102,7 @@ export default defineEventHandler(async (event) => {
   const ownerId = user.id
   // Auth `@nuxtjs/supabase` instead:
   // const user = await serverSupabaseUser(event)
-  // if (!user) throw createError({ statusCode: 401, message: 'Unauthorized' })
+  // if (!user) throw createError({ status: 401, message: 'Unauthorized' })
   // const ownerId = user.id
 
   const { key: fileKey, body } = await readUploadedFile(event)
@@ -113,7 +113,7 @@ export default defineEventHandler(async (event) => {
   }
   catch (error) {
     console.error('[upload] failed', error)
-    throw createError({ statusCode: 500, message: 'File upload failed' })
+    throw createError({ status: 500, message: 'File upload failed' })
   }
 
   return { key }
