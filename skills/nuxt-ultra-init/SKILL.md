@@ -101,7 +101,7 @@ Translate for the other package managers (`npm create nuxt@latest <projectName> 
 
 ## Baseline (always apply)
 
-Apply [baseline.md](references/baseline.md) first. It sets the `dev`/`build` scripts with `--dotenv`, creates `.env.example` plus `.env.local` and `.env.production`, adds `app/pages/`, `devServer.port`, the placeholder logo, MCP config, and `.npmrc` for pnpm. Features append env keys to both env files.
+Apply [baseline.md](references/baseline.md) first. It sets the `dev`/`build` scripts with `--dotenv`, creates `.env.example` plus `.env.local` and `.env.production`, adds `app/pages/`, `devServer.port`, the placeholder logo, MCP config, and `pnpm-workspace.yaml` (hoisting and build approvals) for pnpm. Features append env keys to both env files.
 
 ## Conventions the references rely on
 

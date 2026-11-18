@@ -328,7 +328,7 @@ npm install @nuxt/ui
 npm install -D @iconify-json/lucide @iconify-json/simple-icons
 ```
 
-Nuxt UI v4 bundles Tailwind CSS v4; no separate install is needed. With pnpm, add `shamefully-hoist=true` to `.npmrc`.
+Nuxt UI v4 bundles Tailwind CSS v4; no separate install is needed. With pnpm, `shamefullyHoist: true` is set in `pnpm-workspace.yaml` by the baseline.
 
 Install every icon collection the app uses as an `@iconify-json/*` dev dependency; `clientBundle.scan` reads icons from these local packages. Without them Nuxt Icon fetches icons from a CDN at request time, which fails or is slow on edge runtimes such as Cloudflare Workers. `lucide` is the default set; `simple-icons` covers the OAuth buttons.
 

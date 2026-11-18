@@ -24,8 +24,9 @@ Patch scripts. `dev` reads `.env.local`, `build` reads `.env.production`; both f
 
 ### Path: terminal command
 ```bash
-npm install -D typescript vue-tsc @types/node
+npm install -D typescript@6 vue-tsc @types/node
 ```
+Keep `typescript` on 6.x. vue-tsc 3.3 crashes on TypeScript 7 (`ERR_PACKAGE_PATH_NOT_EXPORTED` for `typescript/lib/tsc`), and `@typescript-eslint` (used by `@nuxt/eslint`) requires `typescript <6.1`. Revisit when both support 7.
 
 ### Path: nuxt.config.ts
 Ensure these keys exist; keep whatever `create nuxt` wrote for `compatibilityDate`. Top-level keys must follow `@nuxt/eslint`'s `nuxt/nuxt-config-keys-order` rule (see **Apply Order** in SKILL.md), so `runtimeConfig` comes before `devServer`.
@@ -87,11 +88,16 @@ CLAUDE.md
 .claude
 ```
 
-### Path: .npmrc
-Only when `packageManager` is `pnpm`:
-```ini
-shamefully-hoist=true
+### Path: pnpm-workspace.yaml
+Only when `packageManager` is `pnpm`. pnpm 10+ reads its settings from this file, not `.npmrc` (pnpm 12 ignores `.npmrc` settings entirely). pnpm also refuses to install when a dependency's build script has not been approved (`ERR_PNPM_IGNORED_BUILDS`), so approve the ones this stack needs: `esbuild` (Nuxt/Vite), `vue-demi` (via `@nuxt/ui`) and `workerd` (via `wrangler`, Cloudflare deployment). Listing a package that is not installed is harmless, so always write all three. Merge into an existing file; if an existing `.npmrc` only holds `shamefully-hoist=true`, delete it.
+```yaml
+shamefullyHoist: true
+allowBuilds:
+  esbuild: true
+  vue-demi: true
+  workerd: true
 ```
+If a later install still fails with `ERR_PNPM_IGNORED_BUILDS`, add the named package under `allowBuilds` after checking it is expected. pnpm may also print "Agent skills awaiting approval" for packages that ship agent skills (`@nuxtjs/seo`); that is informational and does not fail the install.
 
 ### Path: .vscode/mcp.json
 Component and module docs for editors that support MCP.
