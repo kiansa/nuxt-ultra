@@ -33,7 +33,7 @@ Every group is optional. Pick what you need; dependencies are added automaticall
 |---|---|
 | **UI** | [@nuxt/ui](https://ui.nuxt.com/) with a public shell (header, footer, home page) |
 | **Linter** | [@nuxt/eslint](https://eslint.nuxt.com/) with fix-on-save editor settings |
-| **Database** | [@nuxtjs/supabase](https://supabase.nuxtjs.org/), or `nuxt-postgrest`, a local module for any PostgREST endpoint with user-scoped JWTs for RLS |
+| **Database** | [@nuxtjs/supabase](https://supabase.nuxtjs.org/), or [nuxt-postgrest](https://kiansa.github.io/nuxt-postgrest/) for any PostgREST endpoint with user-scoped JWTs for RLS |
 | **Auth** | Supabase Auth, or [nuxt-auth-utils](https://github.com/atinux/nuxt-auth-utils) with password + email OTP, reset links, remember-me and GitHub/Google OAuth |
 | **Dashboard** | User and/or admin dashboard built on Nuxt UI, at a route you choose or as the app root |
 | **i18n** | [@nuxtjs/i18n](https://i18n.nuxtjs.org/) with file-based or database-backed translations and RTL support |
@@ -49,7 +49,7 @@ Every group is optional. Pick what you need; dependencies are added automaticall
 |---|---|
 | Auth (either provider) | `@nuxt/ui` and `zod` |
 | Auth via Supabase | Database via Supabase |
-| Auth via `nuxt-auth-utils` | A database for the users table |
+| Auth via `nuxt-auth-utils` | A database for the users table (needs Nuxt 4.6 or later) |
 | Dashboard | `@nuxt/ui` and an Auth provider |
 | i18n in remote mode | A database for translations |
 
@@ -65,7 +65,7 @@ The features share a small set of conventions so they compose cleanly:
 - **One auth composable.** `useAuth()` exposes `user`, `loggedIn`, `displayName`, `avatar` and `logout` regardless of the provider, so the dashboard works with either.
 - **One database handle.** `useDb(event)` is the server-side admin client both database variants expose.
 - **Thin server routes.** Handlers validate with `readValidatedBody(event, schema.parse)` using schemas from `shared/utils/`, then call a helper from `server/utils/`.
-- **Generated types.** `shared/types/database.types.ts` is produced by `npm run db:types` through the Supabase CLI for either database variant.
+- **Generated types.** `shared/types/database.types.ts` is produced by `npm run db:types` through the Supabase CLI for either database variant (wrapped by `nuxt-postgrest types` for PostgREST).
 - **Bundled icons.** Icons come from `@iconify-json/*` packages, so nothing is fetched at runtime on edge hosts.
 
 ## How it works

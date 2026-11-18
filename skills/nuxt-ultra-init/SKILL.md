@@ -81,7 +81,7 @@ Resolve these before summarizing. Add the dependency automatically and tell the 
 |---|---|
 | Auth (either) | UI `@nuxt/ui`, Validation `zod` |
 | Auth `@nuxtjs/supabase` | DB `@nuxtjs/supabase` |
-| Auth `nuxt-auth-utils` | a DB (`@nuxtjs/supabase` or `nuxt-postgrest`) for the users table |
+| Auth `nuxt-auth-utils` | a DB (`@nuxtjs/supabase` or `nuxt-postgrest`) for the users table, and Nuxt >= 4.6 (upgrade an existing project first) |
 | Dashboard | UI `@nuxt/ui`, Auth (either) |
 | i18n `remote` mode | a DB |
 | Storage `cloudflare-r2` | nothing (works on any host via S3 API) |
@@ -107,7 +107,7 @@ Apply [baseline.md](references/baseline.md) first. It sets the `dev`/`build` scr
 
 - **Route groups.** Pages under `app/pages/(protected)/` and `app/pages/(guest)/` get `to.meta.groups` (`['protected']`, `['guest']`) from Nuxt; the folder name never appears in the URL. Auth middleware keys on these groups. Put every signed-in page under `(protected)`.
 - **`useAuth()`** is the provider-neutral composable (`user`, `loggedIn`, `displayName`, `avatar`, `logout`) that both auth references create and the dashboard uses.
-- **`useDb(event)`** is the server-side admin database handle both DB variants expose for auth code.
+- **`useDb(event)`** is the server-side admin database handle both DB variants create in `server/utils/db.ts` for auth and i18n code.
 - **Server routes stay thin**: `readValidatedBody(event, schema.parse)` with schemas from `shared/utils/`, then a helper from `server/utils/`.
 - **Icons** are bundled from `@iconify-json/*` packages, never fetched at runtime.
 
@@ -136,7 +136,7 @@ Each reference file lists path-scoped blocks. A block headed `### Path: <file>` 
 
 UI → Linter → DB → Auth → Dashboard → i18n → SEO → Validation → AI → Storage → Deployment.
 
-When multiple features add entries to `nuxt.config.ts` (`modules`, `runtimeConfig`, `nitro`, `css`, module config keys), collect them and write the file once. Keep `modules` in this order: `@nuxt/ui`, `@nuxt/eslint`, `@nuxtjs/supabase`, `nuxt-auth-utils`, `@nuxtjs/i18n`, `@nuxtjs/seo`. Local modules under `modules/` are auto-registered by Nuxt and must not be listed.
+When multiple features add entries to `nuxt.config.ts` (`modules`, `runtimeConfig`, `nitro`, `css`, module config keys), collect them and write the file once. Keep `modules` in this order: `@nuxt/ui`, `@nuxt/eslint`, `@nuxtjs/supabase` or `nuxt-postgrest`, `nuxt-auth-utils`, `@nuxtjs/i18n`, `@nuxtjs/seo`.
 
 ## Guardrails
 

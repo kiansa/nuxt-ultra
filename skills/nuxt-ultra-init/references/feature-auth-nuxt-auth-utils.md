@@ -3,8 +3,10 @@
 ## Condition
 Apply when Auth is `nuxt-auth-utils`. Requires a DB (`@nuxtjs/supabase` or `nuxt-postgrest`), UI `@nuxt/ui` and Validation `zod` (added automatically).
 
+Targets `nuxt-auth-utils` >= 0.6, which needs **Nuxt >= 4.6**. In an existing project on an older Nuxt, upgrade Nuxt first (`npx nuxt upgrade`) and tell the user. Server code here uses the portable `nuxt/server` API: handlers import `defineEventHandler` and friends from `nuxt/server` explicitly and receive a `RequestEvent`, the same event type the module passes to OAuth callbacks, so the shared helpers type-check in both places.
+
 Design (mirrors the production pattern):
-- Sessions are sealed cookies managed by the module. Route protection is a **global middleware** keyed on Nuxt route groups: pages under `app/pages/(protected)/` require a session, pages under `app/pages/(guest)/` redirect away when logged in. Nuxt 4 exposes the group names as `to.meta.groups`.
+- Sessions are sealed cookies (`nuxt-auth-session`) managed by the module, sealed with a key derived from Nuxt's `appSecret` (`NUXT_APP_SECRET`). Route protection is a **global middleware** keyed on Nuxt route groups: pages under `app/pages/(protected)/` require a session, pages under `app/pages/(guest)/` redirect away when logged in. Nuxt 4 exposes the group names as `to.meta.groups`.
 - A `users` row can have several `credentials` rows (`email` password, `github`, `google`), so the same person can log in with any of them.
 - Email + password registration sends a 6-digit OTP; login is refused until the email is confirmed. Forgot/reset password works through a one-hour token link. Both need the email helper below. If `emailProvider` is `none`, registration auto-confirms and the forgot/reset pages are skipped.
 - "Remember me" extends the cookie to 400 days (the browser cap). Sessions without it hard-expire after one day.
@@ -48,8 +50,6 @@ declare module '#auth-utils' {
     loggedInAt: number
     /** "Remember me" was checked: cookie is long-lived and the 1-day hard expiry is skipped. */
     remember?: boolean
-    /** Only when DB is nuxt-postgrest: user-scoped JWT for RLS queries. */
-    postgrestToken?: string
   }
 }
 
@@ -126,36 +126,15 @@ create table if not exists public.credentials (
   unique (provider, provider_id)
 );
 ```
-Then run `npm run db:types`. With `nuxt-postgrest`, also run `NOTIFY pgrst, 'reload schema';` and make sure the service role can read/write both tables.
+Then run `npm run db:types`. With `nuxt-postgrest`, also run `NOTIFY pgrst, 'reload schema';` and make sure the role behind `NUXT_POSTGREST_SECRET_KEY` can read/write both tables.
 
-### Path: server/utils/db.ts
-Admin database handle used by the auth routes. Pick the variant for the selected DB.
-
-**DB is `@nuxtjs/supabase`:**
-```ts
-import type { H3Event } from 'h3'
-import { serverSupabaseServiceRole } from '#supabase/server'
-import type { Database } from '#shared/types/database.types'
-
-/** Service-role client (bypasses RLS). Server only. */
-export function useDb(event: H3Event) {
-  return serverSupabaseServiceRole<Database>(event)
-}
-```
-
-**DB is `nuxt-postgrest`:**
-```ts
-import type { H3Event } from 'h3'
-
-/** Service-role client (bypasses RLS). Server only. */
-export function useDb(_event?: H3Event) {
-  return usePostgrestAdmin()
-}
-```
+`useDb(event)` (in `server/utils/db.ts`) comes from the DB feature; the auth routes use it as the admin handle.
 
 ### Path: server/utils/email.ts
 Only when `emailProvider` is `resend`. Resend is a plain HTTPS API, so it runs on Cloudflare Workers too.
 ```ts
+import { useRuntimeConfig } from 'nuxt/server'
+
 export interface SendEmailInput {
   to: string
   subject: string
@@ -197,9 +176,10 @@ export function resetPasswordEmail(link: string) {
 ```
 
 ### Path: server/utils/auth.ts
-Shared helpers for every auth route.
+Shared helpers for every auth route. When DB is `@nuxtjs/supabase`, drop the PostgREST token lines at the end of `signIn` (`mintJwt` and `setPostgrestToken` come from `nuxt-postgrest`).
 ```ts
-import type { H3Event } from 'h3'
+import { createError } from 'nuxt/server'
+import type { RequestEvent } from 'nuxt/server'
 import type { Database } from '#shared/types/database.types'
 
 type UserRow = Database['public']['Tables']['users']['Row']
@@ -211,7 +191,7 @@ export const OTP_MINUTES = 10
 export const RESET_MINUTES = 60
 
 /** Deliberately vague so responses do not reveal whether an email exists. */
-export const invalidCredentials = () => createError({ statusCode: 422, message: 'Invalid credentials' })
+export const invalidCredentials = () => createError({ status: 422, message: 'Invalid credentials' })
 
 export function genOtp(length = 6) {
   return Array.from(crypto.getRandomValues(new Uint8Array(length)), n => String(n % 10)).join('')
@@ -225,7 +205,7 @@ export function minutesFromNow(minutes: number) {
   return new Date(Date.now() + minutes * 60 * 1000).toISOString()
 }
 
-export async function findCredential(event: H3Event, provider: string, providerId: string) {
+export async function findCredential(event: RequestEvent, provider: string, providerId: string) {
   const { data } = await useDb(event)
     .from('credentials')
     .select('*')
@@ -235,13 +215,13 @@ export async function findCredential(event: H3Event, provider: string, providerI
   return data
 }
 
-export async function getUser(event: H3Event, id: string) {
+export async function getUser(event: RequestEvent, id: string) {
   const { data } = await useDb(event).from('users').select('*').eq('id', id).maybeSingle()
   return data
 }
 
 /** Creates the users row if the email is new, then the credential. Returns null on duplicate credential. */
-export async function createUserWithCredential(event: H3Event, input: {
+export async function createUserWithCredential(event: RequestEvent, input: {
   name: string
   email: string
   avatar?: string
@@ -260,7 +240,7 @@ export async function createUserWithCredential(event: H3Event, input: {
       .insert({ name: input.name, email: input.email, avatar_url: input.avatar })
       .select('*')
       .single()
-    if (error) throw createError({ statusCode: 500, message: error.message })
+    if (error) throw createError({ status: 500, message: error.message })
     user = data
   }
 
@@ -279,22 +259,25 @@ export async function createUserWithCredential(event: H3Event, input: {
     .single()
   if (error) {
     if (error.code === '23505') return null // unique violation: credential already exists
-    throw createError({ statusCode: 500, message: error.message })
+    throw createError({ status: 500, message: error.message })
   }
 
   return { user, credential }
 }
 
 /** Builds the session payload and writes the cookie. The only place that calls setUserSession. */
-export async function signIn(event: H3Event, user: UserRow, options: { remember?: boolean } = {}) {
+export async function signIn(event: RequestEvent, user: UserRow, options: { remember?: boolean } = {}) {
   const session = {
     user: { id: user.id, email: user.email, name: user.name, avatar: user.avatar_url ?? undefined },
     loggedInAt: Date.now(),
     ...(options.remember ? { remember: true } : {}),
-    // DB is nuxt-postgrest: uncomment so usePostgrest()/usePostgrestUser() run as this user under RLS.
-    // postgrestToken: await mintPostgrestToken({ sub: user.id }, options.remember ? REMEMBER_ME_MAX_AGE : 24 * 60 * 60),
   }
   await setUserSession(event, session, options.remember ? { maxAge: REMEMBER_ME_MAX_AGE } : undefined)
+
+  // DB is nuxt-postgrest only: store a user JWT so usePostgrest()/usePostgrestUser() run as this user under RLS.
+  // Same lifetime as the session; cleared on logout by server/plugins/postgrest-session.ts.
+  const token = await mintJwt({ role: 'authenticated', sub: user.id }, { expiresIn: options.remember ? REMEMBER_ME_MAX_AGE : 24 * 60 * 60 })
+  setPostgrestToken(event, token)
 }
 
 export type { CredentialRow, UserRow }
@@ -302,6 +285,8 @@ export type { CredentialRow, UserRow }
 
 ### Path: server/api/auth/register.post.ts
 ```ts
+import { defineEventHandler, readValidatedBody, useRuntimeConfig } from 'nuxt/server'
+
 export default defineEventHandler(async (event) => {
   const { name, email, password } = await readValidatedBody(event, registerSchema.parse)
 
@@ -333,26 +318,28 @@ If `emailProvider` is `none`, replace the body with: create the credential with 
 ### Path: server/api/auth/confirm-otp.post.ts
 Only when `emailProvider` is `resend`.
 ```ts
+import { createError, defineEventHandler, readValidatedBody } from 'nuxt/server'
+
 export default defineEventHandler(async (event) => {
   const { credentialId, otp } = await readValidatedBody(event, otpSchema.parse)
   const db = useDb(event)
 
   const { data: credential } = await db.from('credentials').select('*').eq('id', credentialId).maybeSingle()
   if (!credential || !credential.otp || credential.otp !== otp || !credential.otp_expires_at) {
-    throw createError({ statusCode: 422, message: 'Invalid code' })
+    throw createError({ status: 422, message: 'Invalid code' })
   }
 
   if (new Date(credential.otp_expires_at) <= new Date()) {
     const fresh = genOtp()
     await db.from('credentials').update({ otp: fresh, otp_expires_at: minutesFromNow(OTP_MINUTES) }).eq('id', credential.id)
     await sendEmail({ to: credential.provider_id, ...otpEmail(fresh, OTP_MINUTES) })
-    throw createError({ statusCode: 422, message: 'Code expired. We sent you a new one.' })
+    throw createError({ status: 422, message: 'Code expired. We sent you a new one.' })
   }
 
   await db.from('credentials').update({ email_confirmed: true, otp: null, otp_expires_at: null }).eq('id', credential.id)
 
   const user = await getUser(event, credential.user_id)
-  if (!user) throw createError({ statusCode: 500, message: 'User not found' })
+  if (!user) throw createError({ status: 500, message: 'User not found' })
 
   await signIn(event, user)
   return { ok: true }
@@ -361,6 +348,8 @@ export default defineEventHandler(async (event) => {
 
 ### Path: server/api/auth/login.post.ts
 ```ts
+import { createError, defineEventHandler, readValidatedBody } from 'nuxt/server'
+
 export default defineEventHandler(async (event) => {
   const { email, password, remember } = await readValidatedBody(event, loginSchema.parse)
 
@@ -378,7 +367,7 @@ export default defineEventHandler(async (event) => {
   if (!(await verifyPassword(credential.password_hash, password))) throw invalidCredentials()
 
   const user = await getUser(event, credential.user_id)
-  if (!user) throw createError({ statusCode: 500, message: 'User not found' })
+  if (!user) throw createError({ status: 500, message: 'User not found' })
 
   await signIn(event, user, { remember })
   return { confirmed: true }
@@ -389,6 +378,8 @@ If `emailProvider` is `none`, delete the `email_confirmed` block.
 ### Path: server/api/auth/forgot-password.post.ts
 Only when `emailProvider` is `resend`.
 ```ts
+import { defineEventHandler, getRequestURL, readValidatedBody } from 'nuxt/server'
+
 export default defineEventHandler(async (event) => {
   const { email } = await readValidatedBody(event, forgotPasswordSchema.parse)
 
@@ -412,6 +403,8 @@ export default defineEventHandler(async (event) => {
 ### Path: server/api/auth/reset-password.post.ts
 Only when `emailProvider` is `resend`.
 ```ts
+import { createError, defineEventHandler, readValidatedBody } from 'nuxt/server'
+
 export default defineEventHandler(async (event) => {
   const { credentialId, token, password } = await readValidatedBody(event, resetPasswordSchema.parse)
   const db = useDb(event)
@@ -419,7 +412,7 @@ export default defineEventHandler(async (event) => {
   const { data: credential } = await db.from('credentials').select('*').eq('id', credentialId).maybeSingle()
   if (!credential || !credential.reset_token || credential.reset_token !== token || !credential.reset_expires_at
     || new Date(credential.reset_expires_at) <= new Date()) {
-    throw createError({ statusCode: 422, message: 'Invalid or expired reset link' })
+    throw createError({ status: 422, message: 'Invalid or expired reset link' })
   }
 
   await db.from('credentials').update({
@@ -430,7 +423,7 @@ export default defineEventHandler(async (event) => {
   }).eq('id', credential.id)
 
   const user = await getUser(event, credential.user_id)
-  if (!user) throw createError({ statusCode: 500, message: 'User not found' })
+  if (!user) throw createError({ status: 500, message: 'User not found' })
 
   await signIn(event, user)
   return { ok: true }
@@ -440,9 +433,14 @@ export default defineEventHandler(async (event) => {
 ### Path: server/routes/auth/github.get.ts
 Only if `github` was selected. Callback URL to register at GitHub: `<origin>/auth/github`.
 ```ts
+import { sendRedirect } from 'nuxt/server'
+
 export default defineOAuthGitHubEventHandler({
   config: { emailRequired: true },
   async onSuccess(event, { user: gh }) {
+    // `emailRequired` fetches the primary email, but the type stays nullable.
+    if (!gh.email) return sendRedirect(event, '/login?error=oauth')
+
     const providerId = String(gh.id)
     let credential = await findCredential(event, 'github', providerId)
 
@@ -475,6 +473,8 @@ export default defineOAuthGitHubEventHandler({
 ### Path: server/routes/auth/google.get.ts
 Only if `google` was selected. Redirect URI to register at Google: `<origin>/auth/google`.
 ```ts
+import { sendRedirect } from 'nuxt/server'
+
 export default defineOAuthGoogleEventHandler({
   async onSuccess(event, { user: g }) {
     let credential = await findCredential(event, 'google', g.sub)
@@ -502,6 +502,16 @@ export default defineOAuthGoogleEventHandler({
     console.error('[auth] Google OAuth failed', error)
     return sendRedirect(event, '/login?error=oauth')
   },
+})
+```
+
+### Path: server/plugins/postgrest-session.ts
+Only when DB is `nuxt-postgrest`. Drops the PostgREST token cookie whenever the session is cleared (`useUserSession().clear()`), so later queries fall back to the anon key.
+```ts
+export default defineNitroPlugin(() => {
+  sessionHooks.hook('clear', (_session, event) => {
+    clearPostgrestToken(event)
+  })
 })
 ```
 
@@ -955,10 +965,10 @@ async function onSubmit(payload: FormSubmitEvent<Pick<ResetPasswordInput, 'passw
 ```
 
 ### Path: .env.local
-Include only selected providers and, for `resend`, the email keys.
+Include only selected providers and, for `resend`, the email keys. In development Nuxt generates `appSecret` itself, so `NUXT_APP_SECRET` stays commented out here; set it to keep sessions valid across dev-server restarts. Never write `NUXT_SESSION_PASSWORD`: v0.6 ignores it and logs a warning while it is set (remove it when patching an existing project).
 ```dotenv
-# Auth (nuxt-auth-utils) — at least 32 characters
-NUXT_SESSION_PASSWORD="change-me-to-a-random-string-of-32-plus-chars"
+# Auth (nuxt-auth-utils). Session cookies are sealed with a key derived from Nuxt's appSecret.
+# NUXT_APP_SECRET="generate-with-openssl-rand-base64-32"
 NUXT_OAUTH_GITHUB_CLIENT_ID=""
 NUXT_OAUTH_GITHUB_CLIENT_SECRET=""
 NUXT_OAUTH_GOOGLE_CLIENT_ID=""
@@ -970,7 +980,7 @@ NUXT_EMAIL_FROM="App <no-reply@example.com>"
 ```
 
 ### Path: .env.production
-Same keys as `.env.local` with a different session password.
+Same keys as `.env.local`, with `NUXT_APP_SECRET` uncommented. It is **required** in production (at least 32 characters): builds never generate one. Use a different value from development.
 
 ## Packages
 
@@ -980,7 +990,8 @@ npm install nuxt-auth-utils
 ```
 
 ## Tell the user
-- Generate a session password: `openssl rand -base64 32`.
+- Generate the production secret with `openssl rand -base64 32` and set it as `NUXT_APP_SECRET`. It replaces `NUXT_SESSION_PASSWORD` from nuxt-auth-utils 0.5; changing it logs every user out.
+- On Cloudflare Workers, `compatibility_date` must be `2025-04-01` or later (the deployment feature uses today's date) or the Worker cannot read `NUXT_APP_SECRET` and `NUXT_OAUTH_*`.
 - Run the SQL, then `npm run db:types`.
 - OAuth callback URLs: `<origin>/auth/github`, `<origin>/auth/google`.
 - Put pages that need a session under `app/pages/(protected)/`; the folder name never appears in the URL. Protect API routes with `await requireUserSession(event)`.
